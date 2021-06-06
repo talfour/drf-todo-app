@@ -10,31 +10,27 @@ from core.models import Recipe, Tag, Ingredient
 from recipe.serializers import RecipeSerializer, RecipeDetailSerializer
 
 
-RECIPE_URL = reverse('recipe:recipe-list')
+RECIPE_URL = reverse("recipe:recipe-list")
 
 
 def detail_url(recipe_id):
     """Return recipe detail url"""
-    return reverse('recipe:recipe-detail', args=[recipe_id])
+    return reverse("recipe:recipe-detail", args=[recipe_id])
 
 
-def sample_tag(user, name='Main course'):
+def sample_tag(user, name="Main course"):
     """Create and return a sample tag"""
     return Tag.objects.create(user=user, name=name)
 
 
-def sample_ingredient(user, name='Cinamon'):
+def sample_ingredient(user, name="Cinamon"):
     """Create and return a sample ingredient"""
     return Ingredient.objects.create(user=user, name=name)
 
 
 def sample_recipe(user, **params):
     """Create and return a sample recipe"""
-    defaults = {
-        'title': 'Sample recipe',
-        'time_minutes': 10,
-        'price': 5.00
-    }
+    defaults = {"title": "Sample recipe", "time_minutes": 10, "price": 5.00}
     defaults.update(params)
 
     return Recipe.objects.create(user=user, **defaults)
@@ -59,8 +55,7 @@ class PrivateRecipeApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(
-            'test@gmail.com',
-            'pass12345'
+            "test@gmail.com", "pass12345"
         )
         self.client.force_authenticate(self.user)
 
@@ -71,7 +66,7 @@ class PrivateRecipeApiTests(TestCase):
 
         res = self.client.get(RECIPE_URL)
 
-        recipe = Recipe.objects.all().order_by('id')
+        recipe = Recipe.objects.all().order_by("id")
         serializer = RecipeSerializer(recipe, many=True)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -80,8 +75,7 @@ class PrivateRecipeApiTests(TestCase):
     def test_recipes_limited_to_user(self):
         """Test retrieving recipes for user"""
         user2 = get_user_model().objects.create_user(
-            "other@gmail.com",
-            'password123'
+            "other@gmail.com", "password123"
         )
         sample_recipe(user=user2)
         sample_recipe(user=self.user)
@@ -106,3 +100,55 @@ class PrivateRecipeApiTests(TestCase):
 
         serializer = RecipeDetailSerializer(recipe)
         self.assertEqual(res.data, serializer.data)
+
+    def test_create_basic_recipe(self):
+        """Test creating recipe"""
+        payload = {
+            "title": "Chocolate cheesecake",
+            "time_minutes": 30,
+            "price": 5.00,
+        }
+        res = self.client.post(RECIPE_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        recipe = Recipe.objects.get(id=res.data["id"])
+        for key in payload.keys():
+            self.assertEqual(payload[key], getattr(recipe, key))
+
+    def test_create_recipe_with_tags(self):
+        """Test creating recipe with tags"""
+        tag1 = sample_tag(user=self.user, name="Vegan")
+        tag2 = sample_tag(user=self.user, name="Dessert")
+        payload = {
+            "title": "Avocado lime cheesecake",
+            "tags": [tag1.id, tag2.id],
+            "time_minutes": 60,
+            "price": 20.00,
+        }
+        res = self.client.post(RECIPE_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        recipe = Recipe.objects.get(id=res.data["id"])
+        tags = recipe.tags.all()
+        self.assertEqual(tags.count(), 2)
+        self.assertIn(tag1, tags)
+        self.assertIn(tag2, tags)
+
+    def test_create_recipe_with_ingredients(self):
+        """Test creating recipe with ingredients"""
+        ingredient1 = sample_ingredient(user=self.user, name="Prawns")
+        ingredient2 = sample_ingredient(user=self.user, name="Ginger")
+        payload = {
+            "title": "Thai prawn red curry",
+            "ingredients": [ingredient1.id, ingredient2.id],
+            "time_minutes": 20,
+            "price": 7.00,
+        }
+        res = self.client.post(RECIPE_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        recipe = Recipe.objects.get(id=res.data["id"])
+        ingredients = recipe.ingredients.all()
+        self.assertEqual(ingredients.count(), 2)
+        self.assertIn(ingredient1, ingredients)
+        self.assertIn(ingredient2, ingredients)
